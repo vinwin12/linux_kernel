@@ -1,0 +1,84 @@
+#################################################
+#																								#
+#					Bug Log																#
+#																								#
+#################################################
+
+		Bug: Kernel is fatally crashing, probably due to RTC_init()
+
+		Solver: Thomas
+
+		Solution: RTC_init() was not the problem. Apparently idt_test (in launch_tests()) didn't like
+				  when I changed the iteration of the for loop from 0 to 19 (instead of the og 0 to 10)
+		-----------------------------------------------------------------------------------------------------
+		Bug: RTC interrupts are occuring, but I don't think they're periodic like they should be, and
+			 when test_interrupts is called, random chars are printed all over the screen. I don't think
+			 the random chars are the problem, rather that they print all at once rather than every second (?)
+
+		Solver: Vin and Thomas
+
+		Solution: Interrupts were not returning from their handlers, thus 1 RTC and 1 Keyboard interrupt occurred,
+				  but nothing else. We wrote an assembly wrapper file that allow for the handler to return after
+				  completion.
+		-----------------------------------------------------------------------------------------------------
+		Bug: Blinking cursor was not working with putc(), in terms of boundary conditions
+
+		Solver: Thomas
+
+		Solution: just an implementation bug (i.e. mathematic/iterative, off-by-one, etc.), relatively simple fixes
+		-----------------------------------------------------------------------------------------------------
+		Bug: handle_buffer() was not handling buffers on certain edge cases, especially when a buffer was filled (127
+			 printable chars) and then they were all deleted (for example): it would not delete them from buffer
+
+		Solver: Thomas and Vin
+
+		Solution: redo of edge/boundary cases, conditionals now compare against PRINT_LENGTH (127) instead
+				  of BUFFER_LENGTH (128). io_buffer is now initialized to all 0's EXCEPT index 0 of '\n'
+		-----------------------------------------------------------------------------------------------------
+		Bug: stack overflow issue with executing a user-level program. For example, when we ran "ls" or "testprint"
+			 four times in a row, on the 4th time the shell would re-execute, as well as close its FDs.
+
+		Solver: Vin and Thomas
+
+		Solution: changed tss.esp0 to the calculated parent process' kernel stack, instead of using assembly to
+				  retrieve the ESP. Confirmed our suspicion that there was a problem related to TSS/halt
+		-----------------------------------------------------------------------------------------------------
+		Bug: execute error for ls, getting segfault
+
+		Solver: Joey
+
+		Solution: changed directory_read to only return one file name at a time,
+					was reading them all before and it overflowed the buff sent in
+		-----------------------------------------------------------------------------------------------------
+		Bug: execute error for cat, terminating abnormally after properly printing file to screen
+
+		Solver: Joey
+
+		Solution: change read data to return 0 at begining of function if the end
+					of the file was reached before the function was called
+		-----------------------------------------------------------------------------------------------------
+		Bug: multiple terminals (structures/paging) were set up, however the state of the previous terminal was
+				 not being saved
+
+		Solver: Chris, Vin, Thomas
+
+		Solution: We needed to flush the TLB immediately after we edited the page_table structure, so that it would
+							contain the most up-to-date virtual address information
+		-----------------------------------------------------------------------------------------------------
+		Bug: Many issues with scheduling, all focused around when, how and where we save ESP and EBP for the "old"
+				 process before context switching to the "new" one
+
+		Solver: Thomas, Vin
+
+		Solution: We were grabbing the ESP and EBP values for the next shell to be executed, like when we would boot
+							up the base shell for Terminals 2 and 3, but were storing them in Terminal 1's shell PCB. This was
+							just one of a few similar issues. Fixed indexing and the general scheduling algorithm to fix
+		-----------------------------------------------------------------------------------------------------
+		Bug: occasionally when pressing ENTER in any of the terminals, it would appear in a different terminal, and eventually
+				 if we tried to execute a user-level program, a GENEREAL_PROTECTION_EXCEPTION would occur
+
+		Solver: Thomas
+
+		Solution: Turns out that terminal_read() was supposed to use the PCB-specific terminal number, not the global variable
+							visible_terminal, which I thought would be sufficient, and so it was not blocking correctly (waiting for user
+							input). To be honest, really glad it was a simple fix, because GPE's are really hard to debug :(
